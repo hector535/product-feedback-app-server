@@ -19,7 +19,7 @@ export const sendActivationEmail = async (token: string, user: User) => {
   const filledTemplate = fillActivateTemplate({
     appName: APP_NAME,
     appUrl: APP_URL,
-    activateUrl: `${origin}/auth/email-activation?t=${token}`,
+    activateUrl: `${origin}/#/auth/email-activation?t=${token}`,
   });
 
   await sendEmail(user, "Activate your email", filledTemplate);
@@ -29,7 +29,7 @@ export const sendResetPasswordEmail = async (token: string, user: User) => {
   const filledTemplate = fillResetPasswordTemplate({
     appName: APP_NAME,
     appUrl: APP_URL,
-    resetUrl: `${origin}/auth/reset-password?t=${token}`,
+    resetUrl: `${origin}/#/auth/reset-password?t=${token}`,
     to: user.name,
   });
 
