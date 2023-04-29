@@ -3,8 +3,8 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { MikroORM, RequestContext } from "@mikro-orm/core";
-import { env, mikroConfig } from "./config/index.js";
+import { RequestContext } from "@mikro-orm/core";
+import { env, orm } from "./config/index.js";
 import {
   authRouter,
   categoryRouter,
@@ -14,7 +14,6 @@ import {
 } from "./routes/index.js";
 
 const app = express();
-const orm = await MikroORM.init(mikroConfig);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 

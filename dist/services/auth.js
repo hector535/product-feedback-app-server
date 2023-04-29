@@ -1,19 +1,17 @@
 import bcrypt from "bcryptjs";
-import { RequestContext, UniqueConstraintViolationException, } from "@mikro-orm/core";
+import { UniqueConstraintViolationException } from "@mikro-orm/core";
 import { User } from "../db/entities/index.js";
 import { BadInputError } from "../errors/custom-errors.js";
-import { CREDENTIAL_ERROR_MESSAGE, RETRIEVE_ENTITY_MANAGER_ERROR, } from "../constants/index.js";
+import { CREDENTIAL_ERROR_MESSAGE } from "../constants/index.js";
+import { orm } from "../config/mikro-orm.config.js";
 export const getAuthServices = () => {
-    const em = RequestContext.getEntityManager();
-    if (!em)
-        throw new Error(RETRIEVE_ENTITY_MANAGER_ERROR);
     const signup = async (userProperties) => {
         try {
-            const user = em.create(User, {
+            const user = orm.em.create(User, {
                 ...userProperties,
                 createdAt: new Date(),
             });
-            await em.persistAndFlush(user);
+            await orm.em.persistAndFlush(user);
             return user;
         }
         catch (error) {
@@ -26,21 +24,25 @@ export const getAuthServices = () => {
     };
     const getUserByEmail = async (email) => {
         try {
-            return await em.findOneOrFail(User, { email, activated: true });
+            return await orm.em.findOneOrFail(User, { email, activated: true });
         }
         catch (error) {
             throw new BadInputError(CREDENTIAL_ERROR_MESSAGE);
         }
     };
     const resetPassword = async (email, password) => {
-        const user = await em.findOneOrFail(User, { email });
-        user.password = password;
-        await em.flush();
+        await orm.em.transactional(async (inner) => {
+            const user = await inner.findOneOrFail(User, { email });
+            user.password = password;
+            await inner.flush();
+        });
     };
     const activateEmail = async (email) => {
-        const user = await em.findOneOrFail(User, { email });
-        user.activated = true;
-        await em.flush();
+        await orm.em.transactional(async (inner) => {
+            const user = await inner.findOneOrFail(User, { email });
+            user.activated = true;
+            await inner.flush();
+        });
     };
     const validateCredentials = async (email, password) => {
         const user = await getUserByEmail(email);

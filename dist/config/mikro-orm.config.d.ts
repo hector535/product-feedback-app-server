@@ -1,4 +1,2 @@
-import { Options } from "@mikro-orm/core";
-import type { PostgreSqlDriver } from "@mikro-orm/postgresql";
-declare const _default: Options<PostgreSqlDriver>;
-export default _default;
+import { MikroORM } from "@mikro-orm/core";
+export declare const orm: MikroORM<import("@mikro-orm/core").IDatabaseDriver<import("@mikro-orm/core").Connection>>;

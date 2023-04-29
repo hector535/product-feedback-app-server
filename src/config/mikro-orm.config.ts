@@ -1,16 +1,22 @@
-import { LoadStrategy, Options } from "@mikro-orm/core";
+import { LoadStrategy, MikroORM } from "@mikro-orm/core";
 import { TsMorphMetadataProvider } from "@mikro-orm/reflection";
-import type { PostgreSqlDriver } from "@mikro-orm/postgresql";
 
 import { env } from "./index.js";
 
 const { database, mikroOrmConfig } = env;
 const { migrations, seeder, type, entities, entitiesTs } = mikroOrmConfig;
 
-export default {
+export const orm = await MikroORM.init({
   migrations,
   seeder,
-  type,
+  type: type as
+    | "mongo"
+    | "mysql"
+    | "mariadb"
+    | "postgresql"
+    | "sqlite"
+    | "better-sqlite"
+    | undefined,
   entities,
   entitiesTs,
   host: database.host,
@@ -19,6 +25,7 @@ export default {
   password: database.password,
   port: database.port,
   debug: false,
+  allowGlobalContext: false,
   metadataProvider: TsMorphMetadataProvider,
   loadStrategy: LoadStrategy.JOINED,
-} as Options<PostgreSqlDriver>;
+});

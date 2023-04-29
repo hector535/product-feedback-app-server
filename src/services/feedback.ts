@@ -1,4 +1,3 @@
-import { RequestContext } from "@mikro-orm/core";
 import {
   Category,
   Feedback,
@@ -15,20 +14,16 @@ import {
   GetCommentsReturn,
 } from "../types/index.js";
 import { feedbackSchema } from "../schemas/index.js";
-import { RETRIEVE_ENTITY_MANAGER_ERROR } from "../constants/index.js";
+import { orm } from "../config/mikro-orm.config.js";
 
 export const getFeedbackServices = () => {
-  const em = RequestContext.getEntityManager();
-
-  if (!em) throw new Error(RETRIEVE_ENTITY_MANAGER_ERROR);
-
   const getAll = async ({
     uid,
     limit,
     status,
     offset,
   }: GetAllParams): Promise<[Feedback[], number]> => {
-    const conn = em.getConnection();
+    const conn = orm.em.getConnection();
     const res = await conn.execute(
       `
         select 
@@ -62,7 +57,7 @@ export const getFeedbackServices = () => {
     id: number,
     uid: number
   ): Promise<GetByIdForPreviewReturn> => {
-    const conn = em.getConnection();
+    const conn = orm.em.getConnection();
     const rows = await conn.execute(
       `
         select 
@@ -89,7 +84,7 @@ export const getFeedbackServices = () => {
     feedbackId: number,
     commentId: number | null
   ): Promise<GetCommentsReturn> => {
-    const conn = em.getConnection();
+    const conn = orm.em.getConnection();
     const rows = await conn.execute(`select * from f_comments(?, ?)`, [
       feedbackId,
       commentId,
@@ -99,9 +94,9 @@ export const getFeedbackServices = () => {
   };
 
   const getByIdForEdit = async (id: number, uid: number): Promise<Feedback> => {
-    return await em.findOneOrFail(
+    return await orm.em.findOneOrFail(
       Feedback,
-      { id, author: em.getReference(User, uid) },
+      { id, author: orm.em.getReference(User, uid) },
       {
         populate: ["category", "status"],
         fields: ["title", "content", "category.id", "status.id"],
@@ -110,7 +105,7 @@ export const getFeedbackServices = () => {
   };
 
   const getCountByStatus = async (): Promise<CountByStatusParams> => {
-    const connection = em.getConnection();
+    const connection = orm.em.getConnection();
     const rows = await connection.execute(`
         select
             (select count(id) from feedback where status_id = 2) as "planned",
@@ -128,18 +123,18 @@ export const getFeedbackServices = () => {
     author,
   }: AddParams): Promise<void> => {
     const newDate = new Date();
-    const newFeedback = em.create(Feedback, {
+    const newFeedback = orm.em.create(Feedback, {
       title,
       content,
       enabled: true,
       createdAt: newDate,
       updatedAt: newDate,
-      category: em.getReference(Category, category.id),
-      author: em.getReference(User, author.id),
-      status: em.getReference(FeedbackStatus, 1),
+      category: orm.em.getReference(Category, category.id),
+      author: orm.em.getReference(User, author.id),
+      status: orm.em.getReference(FeedbackStatus, 1),
     });
 
-    await em.persistAndFlush(newFeedback);
+    await orm.em.persistAndFlush(newFeedback);
   };
 
   const edit = async ({
@@ -150,48 +145,54 @@ export const getFeedbackServices = () => {
     category,
     status,
   }: EditParams): Promise<void> => {
-    const feedbackToEdit = await em.findOneOrFail(Feedback, {
-      id,
-      author: em.getReference(User, author.id),
+    await orm.em.transactional(async (inner) => {
+      const feedbackToEdit = await inner.findOneOrFail(Feedback, {
+        id,
+        author: inner.getReference(User, author.id),
+      });
+
+      feedbackToEdit.title = title;
+      feedbackToEdit.content = content;
+      feedbackToEdit.category = inner.getReference(Category, category.id);
+      feedbackToEdit.status = inner.getReference(FeedbackStatus, status.id);
+
+      await inner.flush();
     });
-
-    feedbackToEdit.title = title;
-    feedbackToEdit.content = content;
-    feedbackToEdit.category = em.getReference(Category, category.id);
-    feedbackToEdit.status = em.getReference(FeedbackStatus, status.id);
-
-    await em.flush();
   };
 
   const remove = async (id: number, uid: number): Promise<void> => {
-    const feedbackToDelete = await em.findOneOrFail(Feedback, {
-      id,
-      author: em.getReference(User, uid),
+    await orm.em.transactional(async (inner) => {
+      const feedbackToDelete = await inner.findOneOrFail(Feedback, {
+        id,
+        author: inner.getReference(User, uid),
+      });
+
+      feedbackToDelete.enabled = false;
+
+      await inner.flush();
     });
-
-    feedbackToDelete.enabled = false;
-
-    await em.flush();
   };
 
   const upvote = async (id: number, uid: number): Promise<void> => {
-    const upvote = await em.findOne(Upvote, {
-      feedback: em.getReference(Feedback, id),
-      upvoter: em.getReference(User, uid),
+    await orm.em.transactional(async (inner) => {
+      const upvote = await inner.findOne(Upvote, {
+        feedback: inner.getReference(Feedback, id),
+        upvoter: inner.getReference(User, uid),
+      });
+
+      if (upvote) {
+        await inner.removeAndFlush(upvote);
+        return;
+      }
+
+      const newUpvote = inner.create(Upvote, {
+        feedback: inner.getReference(Feedback, id),
+        upvoter: inner.getReference(User, uid),
+        createdAt: new Date(),
+      });
+
+      await inner.persistAndFlush(newUpvote);
     });
-
-    if (upvote) {
-      await em.removeAndFlush(upvote);
-      return;
-    }
-
-    const newUpvote = em.create(Upvote, {
-      feedback: em.getReference(Feedback, id),
-      upvoter: em.getReference(User, uid),
-      createdAt: new Date(),
-    });
-
-    await em.persistAndFlush(newUpvote);
   };
 
   return {

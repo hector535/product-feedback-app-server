@@ -1,43 +1,42 @@
-/* eslint-disable @typescript-eslint/strict-boolean-expressions */
-import { RequestContext } from "@mikro-orm/core";
 import { Comment, Feedback, User } from "../db/entities/index.js";
-import { RETRIEVE_ENTITY_MANAGER_ERROR } from "../constants/index.js";
+import { orm } from "../config/mikro-orm.config.js";
 export const getCommentServices = () => {
-    const em = RequestContext.getEntityManager();
-    if (!em)
-        throw new Error(RETRIEVE_ENTITY_MANAGER_ERROR);
     const add = async ({ content, commentator, feedback, replyingTo, }) => {
         const newDate = new Date();
-        const newComment = em.create(Comment, {
+        const newComment = orm.em.create(Comment, {
             content,
-            commentator: em.getReference(User, commentator.id),
-            feedback: em.getReference(Feedback, feedback.id),
+            commentator: orm.em.getReference(User, commentator.id),
+            feedback: orm.em.getReference(Feedback, feedback.id),
             replyingTo: replyingTo
-                ? em.getReference(Comment, replyingTo.id)
+                ? orm.em.getReference(Comment, replyingTo.id)
                 : undefined,
             createdAt: newDate,
             updatedAt: newDate,
             enabled: true,
         });
-        await em.persistAndFlush(newComment);
+        await orm.em.persistAndFlush(newComment);
         return newComment;
     };
     const edit = async ({ id, content, commentator, }) => {
-        const commentToEdit = await em.findOneOrFail(Comment, {
-            id,
-            commentator: em.getReference(User, commentator.id),
+        return await orm.em.transactional(async (inner) => {
+            const commentToEdit = await inner.findOneOrFail(Comment, {
+                id,
+                commentator: inner.getReference(User, commentator.id),
+            });
+            commentToEdit.content = content;
+            await inner.flush();
+            return commentToEdit;
         });
-        commentToEdit.content = content;
-        await em.flush();
-        return commentToEdit;
     };
     const remove = async ({ id, commentator, }) => {
-        const commentToDelete = await em.findOneOrFail(Comment, {
-            id,
-            commentator: em.getReference(User, commentator.id),
+        await orm.em.transactional(async (inner) => {
+            const commentToDelete = await inner.findOneOrFail(Comment, {
+                id,
+                commentator: inner.getReference(User, commentator.id),
+            });
+            commentToDelete.enabled = false;
+            await inner.flush();
         });
-        commentToDelete.enabled = false;
-        await em.flush();
     };
     return { add, edit, remove };
 };
